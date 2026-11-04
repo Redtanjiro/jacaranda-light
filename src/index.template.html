@@ -1,0 +1,537 @@
+<title>Jacaranda Light</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Pixelify+Sans:wght@400;500;600&family=VT323&display=swap">
+<style>
+/* Layout: a pixel handheld tracker. Bevelled frame → one big map screen (Sydney basemap + every council-listed jacaranda) with a collapsible field-notes dock floating on it → a slim day/time control strip → hour-by-hour forecast log. Single committed look on any host theme. */
+:root{
+  color-scheme:dark;
+  --desk:#15131c; --frame:#5bb8ec; --frame-hi:#a9dcf7; --frame-lo:#2a6fa8; --edge:#14244f;
+  --water:#141d57; --land:#22308a; --grid:#2b3c9c;
+  --cream:#f6ecd6; --ink:#101a3d;
+  --go:#58d68d; --go-lo:#2c8a55; --warn:#f08a7a; --peach:#f7c98f; --peach-lo:#c98b4a;
+  --lcd:#a6f07c; --lcd-bg:#1f3a22; --teal:#5fd6c4; --teal-lo:#2c8d80; --muted:#8fa0d8;
+  --glass:#101a4de6;
+  --s0:#5b6390; --s1:#f08a7a; --s2:#b49ce4; --s3:#58d68d; --s4:#f7c98f;
+  --px:"Silkscreen","Courier New",monospace;
+  --ui:"Pixelify Sans","Trebuchet MS",system-ui,sans-serif;
+  --lcdf:"VT323","Courier New",monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--desk);color:var(--cream);font-family:var(--ui);font-size:15px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+button,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,select:focus-visible{outline:3px solid var(--lcd);outline-offset:2px}
+.notch{clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0 calc(100% - 6px),0 6px)}
+
+.device{background:var(--frame);border:4px solid var(--edge);border-radius:18px;padding:12px;
+  box-shadow:inset 4px 4px 0 var(--frame-hi),inset -4px -4px 0 var(--frame-lo),0 18px 40px #0008;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.plate{background:var(--land);border:3px solid var(--edge);padding:7px 14px;display:flex;align-items:center;gap:12px;box-shadow:inset 0 0 0 2px var(--frame-hi)}
+.plate h1{margin:0;font-family:var(--px);font-weight:700;font-size:clamp(1rem,3.2vw,1.5rem);letter-spacing:.06em;color:var(--frame-hi);text-shadow:2px 2px 0 var(--edge)}
+.plate svg{width:28px;height:28px;flex:none}
+.lcd{background:var(--lcd-bg);border:3px solid var(--edge);padding:4px 12px;font-family:var(--lcdf);color:var(--lcd);font-size:1.6rem;line-height:1;letter-spacing:.04em;
+  box-shadow:inset 0 0 0 2px #0006,0 0 0 3px var(--frame-lo);text-shadow:0 0 6px #a6f07c80;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lcds{display:flex;gap:10px;flex-wrap:wrap}
+.clock{color:var(--peach);text-shadow:0 0 6px #f7c98f80}
+.clock .dot{animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.clock .dot{animation:none}}
+.cell.now{box-shadow:inset 0 0 0 2px #fff}
+#hnow[aria-pressed="true"]{background:var(--peach);box-shadow:inset 3px 3px 0 var(--peach-lo)}
+.lcd small{font-size:1rem;opacity:.75}
+
+/* map screen */
+.screen{position:relative;background:var(--water);border:4px solid var(--edge);border-radius:6px;overflow:hidden;height:clamp(540px,80vh,880px);max-width:100%;
+  box-shadow:inset 0 0 0 3px var(--grid);touch-action:none;user-select:none}
+@media (max-width:700px){.screen{height:min(82vh,760px)}}
+canvas.layer{position:absolute;inset:0;width:100%;height:100%}
+#map{cursor:grab}
+#map.drag{cursor:grabbing}
+#labels{pointer-events:none}
+.scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,#0000 0 3px,#00000016 3px 4px)}
+.hud{position:absolute;left:12px;top:10px;font-family:var(--px);font-size:.6rem;color:var(--frame-hi);opacity:.85;pointer-events:none;line-height:1.5;text-shadow:1px 1px 0 var(--edge)}
+.pins{position:absolute;inset:0;z-index:5;pointer-events:none}
+.pin{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;padding:0;border:0;background:none;pointer-events:auto;filter:drop-shadow(2px 2px 0 #0a1440)}
+.pin svg{width:100%;height:100%;display:block}
+.pin.big{width:36px;height:36px;margin:-18px 0 0 -18px}
+.pin[aria-pressed="true"]{z-index:3}
+.pin[aria-pressed="true"]::after{content:"";position:absolute;inset:-7px;border:3px dashed var(--lcd);border-radius:50%;animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.pin[aria-pressed="true"]::after{animation:none}}
+
+.alert{position:absolute;z-index:9;left:14px;top:46px;width:min(400px,calc(100% - 410px));min-width:240px;background:var(--warn);color:var(--ink);border:3px solid var(--edge);
+  padding:8px 30px 9px 12px;font-family:var(--px);font-size:.66rem;line-height:1.45;box-shadow:4px 4px 0 var(--edge);text-align:left;cursor:pointer}
+.alert b{display:block;font-size:.88rem}
+.alert .x{all:unset;cursor:pointer;position:absolute;right:8px;top:4px;font-size:.8rem;padding:2px}
+@media (max-width:700px){.alert{left:10px;right:10px;width:auto;top:40px;min-width:0}}
+
+.mapctl{position:absolute;z-index:8;left:12px;bottom:12px;display:flex;align-items:flex-end;gap:8px}
+.zoom{display:flex;flex-direction:column;gap:6px}
+.zoom button{width:34px;height:34px;border:3px solid var(--edge);background:var(--peach);color:var(--ink);font-family:var(--px);font-size:.95rem;padding:0;box-shadow:inset -3px -3px 0 var(--peach-lo)}
+.legendmap{background:var(--glass);border:2px solid var(--grid);padding:6px 8px;font-size:.72rem;display:flex;flex-direction:column;gap:3px;pointer-events:none}
+.legendmap span{display:flex;align-items:center;gap:6px}
+.legendmap i{width:12px;height:12px;display:inline-block;border:2px solid var(--edge);border-radius:50%}
+.legendmap i.tdot{width:8px;height:8px;margin:0 2px;border:0;background:#e4d4ff;box-shadow:0 0 0 3px #9b6cff55}
+.legendmap .lh{font-family:var(--px);font-size:.54rem;line-height:1.45;color:var(--frame-hi);margin-top:3px}
+.legendmap .lh b{color:var(--lcd)}
+.rk{position:absolute;right:-6px;top:-7px;min-width:17px;height:17px;padding:0 3px;background:var(--lcd);color:var(--ink);border:2px solid var(--edge);font-family:var(--px);font-size:.58rem;line-height:13px;text-align:center}
+.rk.static{position:static;display:inline-block;margin-right:2px}
+.row .score{font-family:var(--lcdf);font-size:1.25rem;color:var(--ink);padding:0 6px;border:2px solid var(--edge);min-width:40px;text-align:center}
+.row .rank{font-family:var(--px);font-size:.62rem;color:var(--muted);width:20px;text-align:right}
+.row.ranked{grid-template-columns:20px 22px 1fr auto}
+.why{display:block;color:var(--muted);font-size:.74rem;line-height:1.3;margin-top:2px}
+@media (max-width:700px){.legendmap{display:none}.mapctl{top:auto;bottom:auto;top:110px;left:auto;right:12px}}
+
+/* dock (overlay on map) */
+.dock{position:absolute;z-index:10;right:12px;top:12px;width:360px;max-height:calc(100% - 24px);display:flex;flex-direction:column;
+  background:var(--glass);border:3px solid var(--edge);box-shadow:4px 4px 0 #0a144099,inset 0 0 0 2px var(--grid);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.dockbar{display:flex;gap:6px;padding:8px;align-items:stretch}
+.tab{flex:1;border:3px solid var(--edge);background:var(--peach);color:var(--ink);padding:6px 4px;font-family:var(--px);font-size:.7rem;box-shadow:inset -3px -3px 0 var(--peach-lo)}
+.tab[aria-selected="true"]{background:var(--teal);box-shadow:inset 3px 3px 0 var(--teal-lo)}
+.fold{width:38px;flex:none;border:3px solid var(--edge);background:var(--frame-hi);color:var(--ink);font-family:var(--px);font-size:.8rem;padding:0;box-shadow:inset -3px -3px 0 var(--frame)}
+.dockbody{overflow:auto;padding:4px 10px 12px;display:flex;flex-direction:column;gap:10px;min-height:0;overscroll-behavior:contain}
+.dock[data-open="false"]{width:auto;max-height:none}
+.dock[data-open="false"] .dockbody{display:none}
+.dock[data-open="false"] .tab{flex:none;padding:6px 10px}
+@media (max-width:700px){
+  .dock{left:8px;right:8px;top:auto;bottom:8px;width:auto;max-height:58%}
+  .dock[data-open="false"]{left:auto}
+}
+.spothead{font-family:var(--px);font-size:.8rem;line-height:1.35;color:var(--frame-hi)}
+.spothead small{display:block;font-family:var(--ui);font-size:.84rem;color:var(--cream);opacity:.85;margin-top:3px}
+.bubble{position:relative;background:var(--teal);color:var(--ink);border:3px solid var(--edge);padding:7px 10px 8px 11px;border-radius:4px;font-size:.92rem;margin-bottom:6px}
+.bubble::after{content:"";position:absolute;left:14px;bottom:-11px;width:12px;height:10px;background:var(--teal);border-left:3px solid var(--edge);border-bottom:3px solid var(--edge);transform:skewX(-35deg)}
+.bubble.alt{background:var(--frame-hi)}
+.bubble.alt::after{background:var(--frame-hi);left:auto;right:14px;transform:skewX(35deg);border-left:0;border-right:3px solid var(--edge)}
+.bubble .who{font-family:var(--px);font-size:.56rem;letter-spacing:.06em;display:block;margin-bottom:2px;opacity:.75}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0}
+.fact{background:#0d1640;border:2px solid var(--grid);padding:5px 7px}
+.fact dt{font-family:var(--px);font-size:.54rem;color:var(--muted);letter-spacing:.04em}
+.fact dd{margin:0;font-family:var(--lcdf);font-size:1.28rem;line-height:1.05;color:var(--lcd);font-variant-numeric:tabular-nums}
+.skyrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--px);font-size:.6rem;color:var(--muted)}
+.skyrow select{background:var(--peach);color:var(--ink);border:3px solid var(--edge);font-family:var(--px);font-size:.66rem;padding:5px 6px;box-shadow:inset -3px -3px 0 var(--peach-lo)}
+.skyrow a{color:var(--peach)}
+.list{display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;text-align:left;background:#0d1640;border:2px solid var(--grid);padding:6px 8px;color:var(--cream)}
+.row[aria-pressed="true"]{border-color:var(--lcd);background:#1f3a22}
+.row svg{width:22px;height:22px}
+.row b{font-weight:600;font-size:.9rem;display:block;line-height:1.2}
+.row small{color:var(--muted);font-size:.75rem}
+.row .n{font-family:var(--lcdf);font-size:1.3rem;color:var(--lcd)}
+.maplink{align-self:flex-start;font-family:var(--px);font-size:.64rem;color:var(--ink);background:var(--peach);border:3px solid var(--edge);padding:6px 10px;text-decoration:none;box-shadow:inset -3px -3px 0 var(--peach-lo)}
+
+/* control strip */
+.deck{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:#7cc8f0;border:3px solid var(--edge);border-radius:8px;padding:10px 14px;box-shadow:inset 3px 3px 0 var(--frame-hi)}
+.mascot{width:58px;height:58px;flex:none}
+.ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lab{font-family:var(--px);font-size:.62rem;color:var(--edge);min-width:38px}
+.key{border:3px solid var(--edge);padding:7px 12px 8px;font-family:var(--px);font-size:.7rem;letter-spacing:.03em;color:var(--ink);background:var(--go);box-shadow:inset -3px -3px 0 var(--go-lo)}
+.key[aria-pressed="true"],select.key.on{background:var(--teal);box-shadow:inset 3px 3px 0 var(--teal-lo)}
+select.key{appearance:none;-webkit-appearance:none;background-color:var(--go);padding-right:30px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(-45deg,transparent 50%,var(--ink) 50%);
+  background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+.timebox{display:flex;align-items:stretch;gap:6px}
+.timebox .lcd{font-size:1.7rem;min-width:94px;text-align:center;display:flex;align-items:center;justify-content:center}
+.updown{display:flex;flex-direction:column;gap:4px}
+.updown button{width:38px;height:22px;padding:0;border:3px solid var(--edge);background:var(--peach);color:var(--ink);font-size:.7rem;line-height:1;box-shadow:inset -3px -3px 0 var(--peach-lo)}
+.spacer{flex:1}
+@media (max-width:700px){.spacer,.mascot{display:none}.deck{gap:10px}.ctl{width:100%;flex-wrap:nowrap;gap:6px}.ctl .key{padding:6px 7px 7px;font-size:.6rem}select.key{padding-right:24px;min-width:0;flex:1}.pin{width:22px;height:22px;margin:-11px 0 0 -11px}.pin.big{width:28px;height:28px;margin:-14px 0 0 -14px}}
+
+/* log */
+.log{background:var(--land);border:4px solid var(--edge);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 0 3px var(--grid)}
+.log h2{margin:0 0 6px;font-family:var(--px);font-size:.88rem;color:var(--frame-hi);letter-spacing:.06em;text-wrap:balance}
+.dayrow{display:grid;grid-template-columns:84px minmax(0,1fr) 92px;gap:10px;align-items:center}
+.dname{font-family:var(--px);font-size:.64rem;line-height:1.25}
+.dname small{display:block;font-family:var(--lcdf);font-size:1rem;color:var(--muted)}
+.strip{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:3px;min-width:0}
+.cell{height:24px;border:2px solid #0d1640;padding:0;background:var(--s0)}
+.cell[aria-pressed="true"]{outline:3px solid var(--lcd);outline-offset:1px;position:relative;z-index:1}
+.dbest{font-family:var(--lcdf);font-size:1.15rem;color:var(--lcd);text-align:right;white-space:nowrap}
+.ticks{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));white-space:nowrap;font-family:var(--lcdf);font-size:.95rem;color:var(--muted)}
+.ticks span:nth-child(even){visibility:hidden}
+.axis{display:grid;grid-template-columns:84px minmax(0,1fr) 92px;gap:10px}
+@media (max-width:620px){.dayrow{grid-template-columns:1fr auto}.strip{grid-column:1/-1;grid-row:2}.axis{grid-template-columns:1fr}.axis>div:not(.ticks){display:none}}
+.keyline{display:flex;flex-wrap:wrap;gap:12px;font-size:.78rem;color:var(--muted);margin-top:6px}
+.keyline i{display:inline-block;width:12px;height:12px;border:2px solid #0d1640;vertical-align:-2px;margin-right:5px}
+footer{color:#9a95ad;font-size:.8rem;max-width:76ch;line-height:1.5}
+footer a{color:#c3a1ff}
+</style>
+
+<div class="wrap">
+  <div class="device">
+    <div class="top">
+      <div class="plate notch"><svg id="logo" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"></svg><h1>JACARANDA LIGHT</h1></div>
+      <div class="lcds"><div class="lcd clock" id="clock" title="Sydney time">--:--</div><div class="lcd" id="lcd" aria-live="polite">--</div></div>
+    </div>
+
+    <div class="screen" id="screen">
+      <canvas class="layer" id="map" aria-label="Map of Sydney with jacaranda trees. Drag to pan, scroll or pinch to zoom."></canvas>
+      <canvas class="layer" id="labels" aria-hidden="true"></canvas>
+      <div class="hud" id="hud"></div>
+      <div class="pins" id="pins"></div>
+      <button class="alert" id="alert" type="button"></button>
+      <div class="mapctl">
+        <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">−</button><button id="zfit" aria-label="Show all trees">◎</button></div>
+        <div class="legendmap">
+          <span><i class="tdot"></i>One jacaranda tree</span>
+          <span class="lh">PINS = PHOTO SPOTS, COLOURED BY<br>HOW GOOD THEY ARE AT <b id="legtime">--</b></span>
+          <span><i style="background:var(--s4)"></i>Go now</span>
+          <span><i style="background:var(--s3)"></i>Great</span>
+          <span><i style="background:var(--s2)"></i>Good</span>
+          <span><i style="background:var(--s1)"></i>Fair</span>
+          <span><i style="background:var(--s0)"></i>Skip</span>
+          <span><b class="rk static">1</b>Top 3 right now</span>
+        </div>
+      </div>
+      <aside class="dock" id="dock" data-open="true" aria-label="Field notes and spots">
+        <div class="dockbar" role="tablist">
+          <button class="tab" role="tab" id="tab-spots" aria-selected="true">BEST SPOTS</button>
+          <button class="tab" role="tab" id="tab-notes" aria-selected="false">FIELD NOTES</button>
+          <button class="fold" id="fold" aria-expanded="true" aria-controls="dockbody" aria-label="Collapse panel">▾</button>
+        </div>
+        <div class="dockbody" id="dockbody"></div>
+      </aside>
+    </div>
+
+    <div class="deck">
+      <svg class="mascot" id="mascot" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"></svg>
+      <div class="ctl">
+        <span class="lab">DAY</span>
+        <button class="key" id="day-0">TODAY</button>
+        <button class="key" id="day-1">TMRW</button>
+        <select class="key" id="daysel" aria-label="Pick another day"></select>
+      </div>
+      <div class="ctl">
+        <span class="lab">TIME</span>
+        <div class="timebox">
+          <span class="lcd" id="hourlcd">--</span>
+          <div class="updown"><button id="hup" aria-label="Later hour">▲</button><button id="hdown" aria-label="Earlier hour">▼</button></div>
+          <button class="key" id="hnow" aria-pressed="true">NOW</button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+    </div>
+  </div>
+
+  <section class="log">
+    <h2>FORECAST LOG · <span id="logspot"></span></h2>
+    <div class="axis"><div></div><div class="ticks" id="ticks"></div><div></div></div>
+    <div id="log"></div>
+    <div class="keyline">
+      <span><i style="background:var(--s0)"></i>Skip</span><span><i style="background:var(--s1)"></i>Fair</span>
+      <span><i style="background:var(--s2)"></i>Good</span><span><i style="background:var(--s3)"></i>Great</span><span><i style="background:var(--s4)"></i>Go now</span>
+    </div>
+  </section>
+
+  <footer>
+    Trees: council street-tree inventories that publish species, from <a href="https://data.cityofsydney.nsw.gov.au/datasets/cityofsydney::trees/about" target="_blank" rel="noopener">City of Sydney</a> and Randwick City Council, pulled 4 Nov 2026. Most other councils, including North Sydney and Ku-ring-gai, don't publish species, so a few well-known spots there are added by hand. Basemap: roads, parks and rail from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (2017 extract), shoreline from NSW suburb boundaries. Sun positions are calculated in your browser; set the sky from the <a href="https://www.bom.gov.au/nsw/forecasts/sydney.shtml" target="_blank" rel="noopener">BOM forecast</a>, or host this page on a regular site to load hourly cloud and rain from Open-Meteo.
+  </footer>
+</div>
+
+<script>
+const DATA=__DATA__;
+const BASE=__BASE__;
+(()=>{
+const FAV=[
+ {name:"McDougall St, Kirribilli",lat:-33.8470,lon:151.2128,n:0,b:165,el:6,fav:1,note:"North Sydney's famous jacaranda tunnel. Expect crowds on weekends; go at sunrise on a weekday."},
+ {name:"Lavender Bay foreshore",lat:-33.8444,lon:151.2079,n:0,fav:1,note:"Blossoms with the harbour and city skyline behind. Evenings put the sun behind the city."},
+ {name:"USyd Quadrangle",lat:-33.8860,lon:151.1891,n:0,fav:1,note:"One big tree against sandstone. The courtyard holds soft shade early and late."},
+ {name:"Hunters Hill avenues",lat:-33.8356,lon:151.1446,n:0,fav:1,note:"Quiet residential streets with long runs of trees and petal carpets."},
+ {name:"Parramatta Park",lat:-33.8136,lon:150.9970,n:0,fav:1,note:"Open parkland with room to frame whole trees against the sky. Off this map's edge, to the west."}
+];
+const SPOTS=[...DATA.spots.map((s,i)=>({...s,id:"s"+i})),...FAV.map((s,i)=>({...s,id:"f"+i}))];
+const TREES=DATA.trees;
+const SKIES={clear:{label:"CLEAR",c:8,lo:0,hi:8,p:0},some:{label:"SOME CLOUD",c:40,lo:10,hi:35,p:5},overcast:{label:"OVERCAST",c:92,lo:85,hi:30,p:10},showers:{label:"SHOWERS",c:85,lo:70,hi:40,p:70}};
+const HOURS=[...Array(16)].map((_,i)=>i+5);
+const TZ="Australia/Sydney";
+const state={follow:true,spot:SPOTS[0].id,day:0,hour:null,sky:{},live:null,tab:"spots",alert:true,open:true,liveSrc:null,liveAt:null};
+if(window.innerWidth<700)state.open=false;
+try{const s=JSON.parse(localStorage.getItem("jl2")||"{}");if(s.spot&&SPOTS.some(x=>x.id===s.spot))state.spot=s.spot;if(s.sky)state.sky=s.sky;if(typeof s.open==="boolean")state.open=s.open}catch(e){}
+const save=()=>{try{localStorage.setItem("jl2",JSON.stringify({spot:state.spot,sky:state.sky,open:state.open}))}catch(e){}};
+const $=id=>document.getElementById(id);
+const spot=()=>SPOTS.find(s=>s.id===state.spot)||SPOTS[0];
+
+/* pixel art */
+const FLOWER=["..p.p..",".ppppp.","ppPyPpp",".pyyyp.","ppPyPpp",".ppppp.","..p.p.."];
+const pxRects=(rows,map)=>rows.map((row,y)=>[...row].map((c,x)=>map[c]?`<rect x="${x}" y="${y}" width="1" height="1" fill="${map[c]}"/>`:"").join("")).join("");
+const FMAP={p:"#c3a1ff",P:"#8b5cf6",y:"#f7e27a"};
+const flowerSVG=ring=>`<svg viewBox="-1.5 -1.5 10 10" shape-rendering="crispEdges"><circle cx="3.5" cy="3.5" r="4.6" fill="${ring}" stroke="#14244f" stroke-width="0.9"/>${pxRects(FLOWER,FMAP)}</svg>`;
+$("logo").innerHTML=pxRects(FLOWER,FMAP);
+$("mascot").innerHTML=pxRects(["....pp......","...pPPp.....","....pp......","..eeeeeeee..","eeccccccccee","ecckkkkkccce","eckkwwwkkcce","eckkwwwkkcce","ecckkkkkccce","eeccccccccee","..eeeeeeee..","............"],{p:"#c3a1ff",P:"#8b5cf6",e:"#14244f",c:"#f08a7a",k:"#22308a",w:"#a9dcf7"});
+
+/* time */
+const partsFmt=new Intl.DateTimeFormat("en-AU",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+function sydParts(d){const o={};for(const p of partsFmt.formatToParts(d))o[p.type]=+p.value||p.value;return o}
+function offsetMin(y,m,d,h){const g=Date.UTC(y,m-1,d,h)-600*60000,p=sydParts(new Date(g));return Math.round((Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute)-g)/60000)}
+function sydInstant(y,m,d,h,min=0){return new Date(Date.UTC(y,m-1,d,h,min)-offsetMin(y,m,d,h)*60000)}
+function dayList(){const n=sydParts(new Date()),b=Date.UTC(n.year,n.month-1,n.day);return[...Array(7)].map((_,i)=>{const t=new Date(b+i*864e5);return{y:t.getUTCFullYear(),m:t.getUTCMonth()+1,d:t.getUTCDate(),key:t.toISOString().slice(0,10)}})}
+const fmtTime=d=>d.toLocaleTimeString("en-AU",{timeZone:TZ,hour:"numeric",minute:"2-digit"}).replace(/\s/g,"").toLowerCase();
+const hourLabel=h=>(h%12||12)+(h<12?"am":"pm");
+let DAYS=dayList();
+const dayName=(di,short)=>{if(di===0)return"TODAY";if(di===1)return short?"TMRW":"TOMORROW";const d=DAYS[di];return new Date(Date.UTC(d.y,d.m-1,d.d,2)).toLocaleDateString("en-AU",{weekday:short?"short":"long",timeZone:"UTC"}).toUpperCase()};
+
+/* sun (NOAA) */
+const rad=Math.PI/180;
+function sunPos(date,lat,lon){
+  const jd=date/864e5+2440587.5,T=(jd-2451545)/36525;
+  const L0=(280.46646+T*(36000.76983+T*0.0003032))%360,M=357.52911+T*(35999.05029-0.0001537*T),e=0.016708634-T*(0.000042037+0.0000001267*T);
+  const C=Math.sin(M*rad)*(1.914602-T*(0.004817+0.000014*T))+Math.sin(2*M*rad)*(0.019993-0.000101*T)+Math.sin(3*M*rad)*0.000289;
+  const lam=L0+C-0.00569-0.00478*Math.sin((125.04-1934.136*T)*rad);
+  const eps=23+(26+(21.448-T*(46.815+T*(0.00059-T*0.001813)))/60)/60+0.00256*Math.cos((125.04-1934.136*T)*rad);
+  const dec=Math.asin(Math.sin(eps*rad)*Math.sin(lam*rad)),y=Math.tan(eps*rad/2)**2;
+  const eqt=4/rad*(y*Math.sin(2*L0*rad)-2*e*Math.sin(M*rad)+4*e*y*Math.sin(M*rad)*Math.cos(2*L0*rad)-0.5*y*y*Math.sin(4*L0*rad)-1.25*e*e*Math.sin(2*M*rad));
+  let tst=((date.getUTCHours()*60+date.getUTCMinutes()+date.getUTCSeconds()/60)+eqt+4*lon)%1440;if(tst<0)tst+=1440;
+  const ha=tst/4-180,cz=Math.sin(lat*rad)*Math.sin(dec)+Math.cos(lat*rad)*Math.cos(dec)*Math.cos(ha*rad),zen=Math.acos(Math.min(1,Math.max(-1,cz)));
+  const az=Math.atan2(Math.sin(ha*rad),Math.cos(ha*rad)*Math.sin(lat*rad)-Math.tan(dec)*Math.cos(lat*rad))/rad+180;
+  return{elev:90-zen/rad,az:(az+360)%360}
+}
+function sunEvents(day,s){const o={};let prev=null;
+  for(let m=240;m<=1260;m+=2){const t=sydInstant(day.y,day.m,day.d,Math.floor(m/60),m%60),e=sunPos(t,s.lat,s.lon).elev;
+    if(prev!==null){for(const[k,v]of[["rise",-0.833],["goldEnd",6]])if(!o[k]&&prev<v&&e>=v)o[k]=t;for(const[k,v]of[["goldStart",6],["set",-0.833]])if(!o[k]&&prev>=v&&e<v)o[k]=t}prev=e}
+  return o}
+const compass=a=>["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(a/22.5)%16];
+
+/* scoring */
+const phase=e=>e<-6?"Night":e<-1?"Blue hour":e<6?"Golden hour":e<15?"Low sun":e<40?"Bright sun":"High midday sun";
+function score(e,w){
+  if(e<-7)return 0;let s=e<-1?58:e<6?96:e<15?74:e<30?52:e<45?40:30;
+  const c=w.c/100,lo=w.lo/100,hi=w.hi/100;
+  if(e<15){s*=1-0.45*lo;s+=12*Math.max(0,1-Math.abs(hi-0.4)/0.4)*(1-lo)}else s+=(82-s)*Math.min(1,c*1.05)*0.8;
+  s*=1-0.75*(w.p/100);if((w.wind||0)>28)s-=10;return Math.max(0,Math.min(100,Math.round(s)))}
+const band=s=>s>=85?4:s>=68?3:s>=48?2:s>=28?1:0;
+const WORD=["SKIP","FAIR","GOOD","GREAT","GO NOW"];
+function weatherFor(day,h){if(state.live){const r=state.live[day.key+"T"+String(h).padStart(2,"0")];if(r)return r}const k=state.sky[day.key]||"some";return{...SKIES[k],preset:k}}
+async function tryLive(s){if(state.liveSrc==="accu")return;try{const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),6000);
+  const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lon}&hourly=cloud_cover,cloud_cover_low,cloud_cover_high,precipitation_probability,wind_speed_10m&timezone=Australia%2FSydney&forecast_days=7`,{signal:ctl.signal});clearTimeout(to);if(!r.ok)throw 0;
+  const H=(await r.json()).hourly,m={};H.time.forEach((t,i)=>{m[t.slice(0,13)]={c:H.cloud_cover[i],lo:H.cloud_cover_low[i],hi:H.cloud_cover_high[i],p:H.precipitation_probability[i]??0,wind:H.wind_speed_10m[i]}});state.live=m;state.liveSrc="Open-Meteo";state.liveAt=new Date()}catch(e){if(state.liveSrc!=="accu")state.live=null}}
+
+let G=[];
+function grid(){const s=spot();G=DAYS.map(day=>HOURS.map(h=>{const t=sydInstant(day.y,day.m,day.d,h,30),pos=sunPos(t,s.lat,s.lon),w=weatherFor(day,h);return{h,t,pos,w,s:score(pos.elev,w)}}))}
+function bestOverall(){const now=Date.now();let b=null;G.forEach((row,di)=>row.forEach(c=>{if(c.t.getTime()+30*60000>now&&(!b||c.s>b.c.s))b={c,di}}));return b}
+
+/* ---------- basemap decode ---------- */
+function decode(a){const o=new Float64Array(a.length);let x=0,y=0;for(let i=0;i<a.length;i+=2){x+=a[i];y+=a[i+1];o[i]=x/1e5+151;o[i+1]=y/1e5-34}return o}
+function withBox(arr){let a=1e9,b=1e9,c=-1e9,d=-1e9;for(let i=0;i<arr.length;i+=2){const x=arr[i],y=arr[i+1];if(x<a)a=x;if(x>c)c=x;if(y<b)b=y;if(y>d)d=y}return{p:arr,bb:[a,b,c,d]}}
+const L={
+  land:BASE.land.map(p=>p.map(r=>withBox(decode(r)))),
+  water:BASE.water.map(p=>p.map(r=>withBox(decode(r)))),
+  green:BASE.green.map(p=>p.map(r=>withBox(decode(r)))),
+  roads:BASE.roads.map(c=>c.map(r=>withBox(decode(r)))),
+  rail:BASE.rail.map(r=>withBox(decode(r))),
+  sub:BASE.sub.map(([n,x,y,a])=>({n,lon:x/1e5+151,lat:y/1e5-34,a}))
+};
+
+/* ---------- map ---------- */
+const cv=$("map"),ctx=cv.getContext("2d"),lc=$("labels"),lx=lc.getContext("2d"),scr=$("screen");
+const K=Math.cos(33.9*rad);
+const view={cx:151.215,cy:-33.89,z:5};let Z0=5,CW=0,CH=0,PX=2,DPR=1,W=0,H=0;
+const sx=lon=>((lon-view.cx)*K*view.z*1000+CW/2)/PX, sy=lat=>((view.cy-lat)*view.z*1000+CH/2)/PX;
+function viewBox(){const hw=CW/2/(K*view.z*1000),hh=CH/2/(view.z*1000);return[view.cx-hw,view.cy-hh,view.cx+hw,view.cy+hh]}
+const hit=(bb,v)=>!(bb[2]<v[0]||bb[0]>v[2]||bb[3]<v[1]||bb[1]>v[3]);
+function resize(){const r=scr.getBoundingClientRect();CW=r.width;CH=r.height;DPR=Math.min(2,window.devicePixelRatio||1);PX=1/DPR;W=Math.max(1,Math.round(CW/PX));H=Math.max(1,Math.round(CH/PX));cv.width=W;cv.height=H;
+  DPR=Math.min(2,window.devicePixelRatio||1);lc.width=Math.round(CW*DPR);lc.height=Math.round(CH*DPR);if(!fitted&&CW>50&&CH>50)fitAll();queue()}
+let fitted=false;
+function fitAll(){Z0=Math.min(CH/(0.11*1000),CW/(0.115*K*1000))*0.92;view.z=Z0;view.cx=151.212;view.cy=-33.895;fitted=true}
+function ringPath(r,v){const p=r.p;ctx.moveTo(sx(p[0]),sy(p[1]));for(let i=2;i<p.length;i+=2)ctx.lineTo(sx(p[i]),sy(p[i+1]));ctx.closePath()}
+function fillPolys(polys,color,v){ctx.fillStyle=color;ctx.beginPath();for(const poly of polys){if(!hit(poly[0].bb,v))continue;for(const r of poly)ringPath(r,v)}ctx.fill("evenodd")}
+function strokeLines(lines,color,w,v,dash){ctx.strokeStyle=color;ctx.lineWidth=w;ctx.setLineDash(dash||[]);ctx.beginPath();
+  for(const l of lines){if(!hit(l.bb,v))continue;const p=l.p;ctx.moveTo(sx(p[0]),sy(p[1]));for(let i=2;i<p.length;i+=2)ctx.lineTo(sx(p[i]),sy(p[i+1]))}ctx.stroke();ctx.setLineDash([])}
+let raf=0;function queue(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;draw()})}
+function draw(){
+  const v=viewBox(),zr=view.z/Z0;
+  ctx.fillStyle="#141d57";ctx.fillRect(0,0,W,H);
+  ctx.lineJoin="round";ctx.lineCap="round";
+  fillPolys(L.land,"#22308a",v);
+  fillPolys(L.green,"#24596f",v);
+  fillPolys(L.water,"#141d57",v);
+  const u=DPR,rw=Math.max(0.7,Math.min(3,0.9*zr))*u;
+  if(zr>0.7)strokeLines(L.roads[3],"#33489f",Math.max(.6*u,rw*.6),v);
+  strokeLines(L.roads[2],"#4560bf",rw*.9,v);
+  strokeLines(L.rail,"#8fa0d8",Math.max(.7*u,rw*.6),v,[4*u,3*u]);
+  strokeLines(L.roads[1],"#4fa9c9",rw*1.3,v);
+  strokeLines(L.roads[0],"#5fd6c4",rw*1.7,v);
+  // trees
+  const tr=(zr<1.5?1.6:zr<3?2.4:3.6)*u,g=tr*2.4;
+  ctx.fillStyle="rgba(155,108,255,.28)";ctx.beginPath();
+  for(const t of TREES){const x=sx(t[1]),y=sy(t[0]);if(x<-g||y<-g||x>W+g||y>H+g)continue;ctx.moveTo(x+g,y);ctx.arc(x,y,g,0,6.283)}ctx.fill();
+  ctx.fillStyle="#e4d4ff";ctx.beginPath();
+  for(const t of TREES){const x=sx(t[1]),y=sy(t[0]);if(x<-tr||y<-tr||x>W+tr||y>H+tr)continue;ctx.moveTo(x+tr,y);ctx.arc(x,y,tr,0,6.283)}ctx.fill();
+  drawLabels(zr);placePins();
+  const s=spot();$("hud").innerHTML=`SECTOR ${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}<br>${TREES.length.toLocaleString()} TREES ON FILE`;
+}
+function drawLabels(zr){
+  lx.setTransform(DPR,0,0,DPR,0,0);lx.clearRect(0,0,CW,CH);
+  if(zr<1.15)return;
+  const minA=zr>3?0:zr>2?800:2500;
+  lx.font=`${zr>2.5?11:10}px Silkscreen, monospace`;lx.textAlign="center";lx.textBaseline="middle";
+  const placed=[];
+  for(const s of L.sub){if(s.a<minA)continue;const x=sx(s.lon)*PX,y=sy(s.lat)*PX;if(x<0||y<0||x>CW||y>CH)continue;
+    const w=lx.measureText(s.n.toUpperCase()).width+8;if(placed.some(p=>Math.abs(p[0]-x)<(p[2]+w)/2&&Math.abs(p[1]-y)<16))continue;placed.push([x,y,w]);
+    lx.fillStyle="#0d1640cc";lx.fillText(s.n.toUpperCase(),x+1,y+1);lx.fillStyle="#a9dcf7b0";lx.fillText(s.n.toUpperCase(),x,y)}
+}
+const BANDC=["#5b6390","#f08a7a","#b49ce4","#58d68d","#f7c98f"];
+/* spot ranking: light (sun + weather) + how many trees + whether the street lines up with a low sun */
+function angDiff(a,b){let d=Math.abs(a-b)%180;return d>90?180-d:d}
+const axis=b=>{const n=["N–S","NNE–SSW","NE–SW","ENE–WSW","E–W","ESE–WNW","SE–NW","SSE–NNW"];return n[Math.round(((b%180)+180)%180/22.5)%8]};
+function spotScore(s,di,h){
+  const day=DAYS[di],t=sydInstant(day.y,day.m,day.d,h,30),pos=sunPos(t,s.lat,s.lon),w=weatherFor(day,h),light=score(pos.elev,w),why=[];
+  let total=light*0.78;
+  const dens=s.fav?10:Math.min(14,Math.log2(Math.max(2,s.n))*2.2);total+=light>8?dens:0;
+  if(s.fav)why.push("famous local spot");else why.push(`${s.n} trees`);
+  if(pos.elev>-1&&pos.elev<15&&s.b!=null&&s.el>=1.8){const a=Math.cos(angDiff(pos.az,s.b)*rad)**2,f=Math.min(1,(s.el-1.5)/3);total+=9*a*f;
+    if(a>0.65&&f>0.3)why.push(`street runs ${axis(s.b)}, low sun shines straight down it`);else if(a<0.25&&f>0.3)why.push(`street runs ${axis(s.b)}, sun hits it side-on`)}
+  why.unshift(phase(pos.elev).toLowerCase()+(w.p>50?", rain likely":w.c>70?", overcast":""));
+  return{s,total:Math.max(0,Math.min(100,Math.round(total))),light,why}}
+let RANK=[];
+function rankSpots(){RANK=SPOTS.map(s=>spotScore(s,state.day,state.hour)).sort((a,b)=>b.total-a.total||b.s.n-a.s.n)}
+const rankOf=id=>RANK.findIndex(r=>r.s.id===id);
+function buildPins(){$("pins").innerHTML="";
+  for(const s of SPOTS){const b=document.createElement("button");b.className="pin";b.id="pin-"+s.id;
+    b.onclick=e=>{e.stopPropagation();select(s.id)};$("pins").appendChild(b)}}
+let pinSig="";
+function stylePins(){const sig=RANK.map(r=>r.s.id+r.total).join();if(sig===pinSig)return;pinSig=sig;
+  RANK.forEach((r,i)=>{const el=$("pin-"+r.s.id);if(!el)return;const bd=band(r.total);el.className="pin"+(i<10?" big":"");
+    el.innerHTML=flowerSVG(BANDC[bd])+(i<3?`<span class="rk">${i+1}</span>`:"");el.setAttribute("aria-label",`${r.s.name}, rank ${i+1}, ${WORD[bd]}`);el.title=`#${i+1} ${r.s.name} · ${WORD[bd]} (${r.total})`;el.style.zIndex=100-Math.min(99,i)})}
+function placePins(){const zr=view.z/Z0;stylePins();
+  for(const s of SPOTS){const el=$("pin-"+s.id);if(!el)continue;const x=sx(s.lon)*PX,y=sy(s.lat)*PX;
+    const rk=rankOf(s.id);const vis=x>-20&&y>-20&&x<CW+20&&y<CH+20&&(rk<20||zr>1.8||s.id===state.spot);
+    el.hidden=!vis;if(vis){el.style.left=x+"px";el.style.top=y+"px"}el.setAttribute("aria-pressed",s.id===state.spot)}}
+// pan / zoom
+const ptrs=new Map();let pinch=null;const isUI=e=>e.target.closest(".dock,.alert,.mapctl,.pin");
+scr.addEventListener("pointerdown",e=>{if(isUI(e))return;scr.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});cv.classList.add("drag");
+  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:view.z}}});
+scr.addEventListener("pointermove",e=>{if(!ptrs.has(e.pointerId))return;const p=ptrs.get(e.pointerId),dx=e.clientX-p.x,dy=e.clientY-p.y;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2&&pinch){const[a,b]=[...ptrs.values()];view.z=clampZ(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d)}
+  else{view.cx-=dx/(K*view.z*1000);view.cy+=dy/(view.z*1000)}queue()});
+const up=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size)cv.classList.remove("drag")};
+scr.addEventListener("pointerup",up);scr.addEventListener("pointercancel",up);
+scr.addEventListener("wheel",e=>{if(isUI(e))return;e.preventDefault();zoomAt(e.deltaY<0?1.18:1/1.18,e.clientX,e.clientY)},{passive:false});
+const clampZ=z=>Math.max(Z0*0.5,Math.min(Z0*14,z));
+function zoomAt(f,cx,cy){const r=scr.getBoundingClientRect(),mx=(cx??r.left+r.width/2)-r.left-r.width/2,my=(cy??r.top+r.height/2)-r.top-r.height/2;
+  const lon=view.cx+mx/(K*view.z*1000),lat=view.cy-my/(view.z*1000);view.z=clampZ(view.z*f);view.cx=lon-mx/(K*view.z*1000);view.cy=lat+my/(view.z*1000);queue()}
+$("zin").onclick=()=>zoomAt(1.4);$("zout").onclick=()=>zoomAt(1/1.4);$("zfit").onclick=()=>{fitAll();queue()};
+function flyTo(s){view.cx=s.lon;view.cy=s.lat;if(view.z<Z0*2.5)view.z=Z0*3;
+  // nudge left so the dock doesn't cover it on wide screens
+  if(state.open&&CW>700)view.cx+=180/(K*view.z*1000);queue()}
+
+/* ---------- dock ---------- */
+function select(id){state.spot=id;save();grid();if(state.follow)followNow();flyTo(spot());state.tab="notes";renderAll();tryLive(spot()).then(()=>{if(state.live){grid();renderAll()}})}
+function cur(){return G[state.day].find(c=>c.h===state.hour)||G[state.day][3]}
+function tips(c){
+  const e=c.pos.elev,w=c.w,dir=compass(c.pos.az),opp=compass((c.pos.az+180)%360),T=[];
+  if(e<-6){T.push("Too dark for handheld. Bring a tripod for blossoms under streetlights.");return T}
+  if(w.p>50)T.push("Rain likely. Shoot from under an awning, or come back after for wet petals and road reflections.");
+  if(e<-1){T.push("Blue hour. The sky goes cobalt and the purple deepens. Brace the camera on a wall or bump the ISO.");T.push("Catch streetlights or car trails in frame for a moody street shot.")}
+  else if(e<6){T.push(`For glowing petals, face ${dir} so the sun shines through the canopy. Expose for the flowers and let the sky blow out.`);
+    T.push(`For true colour, put the sun at your back and face ${opp}. The blossoms light up front-on.`);
+    if(w.hi>20&&w.lo<50)T.push("High cloud can turn pink and orange. Leave some sky above the branches.")}
+  else if(e<15){T.push(`Sun is low in the ${dir}. Shoot along the street so light rakes across the trees.`);T.push("Use the shade under the canopy for portraits. Faces stay even.")}
+  else if(w.c>65){T.push("Overcast is great for jacarandas. Purples stay rich and there are no hard shadows.");T.push("Keep grey sky out of frame. Shoot into the branches or down at the petal carpet.")}
+  else{T.push("Harsh overhead light. Stand under the canopy and shoot up so the flowers frame blue sky.");T.push("For portraits, find full shade. Dappled light leaves blotches on faces.")}
+  if((w.wind||0)>28)T.push("Windy, so branches will move. Use 1/500 s or faster. Falling petals can look great.");
+  T.push("Phone tip: tap the flowers to focus, then drag exposure down a touch so the purple doesn't wash out.");
+  return T}
+function nowBubble(s){
+  if(!state.follow)return"";const d=new Date(),pos=sunPos(d,s.lat,s.lon),p=sydParts(d),w=weatherFor(DAYS[0],Math.min(HOURS.at(-1),Math.max(HOURS[0],p.hour))),sc=score(pos.elev,w);
+  const tm=fmtTime(d);let msg;
+  if(pos.elev<-6){const ev=sunEvents(p.hour>12?DAYS[1]:DAYS[0],s);msg=`It's ${tm} and dark out. Next usable light starts around ${ev.rise?fmtTime(new Date(ev.rise.getTime()-25*60000)):"dawn"}, with sunrise at ${ev.rise?fmtTime(ev.rise):"--"}.`}
+  else msg=`It's ${tm}: ${phase(pos.elev).toLowerCase()}, sun ${pos.elev.toFixed(0)}° up in the ${compass(pos.az)}. Light score right now ${sc}/100, ${WORD[band(sc)].toLowerCase()}.`;
+  return`<div class="bubble alt"><span class="who">RIGHT NOW · LIVE</span>${msg}</div>`}
+function renderDock(){
+  const D=$("dock");D.dataset.open=state.open;$("fold").textContent=state.open?"▾":"▸";$("fold").setAttribute("aria-expanded",state.open);$("fold").setAttribute("aria-label",state.open?"Collapse panel":"Expand panel");
+  $("tab-notes").setAttribute("aria-selected",state.tab==="notes");$("tab-spots").setAttribute("aria-selected",state.tab==="spots");
+  if(!state.open)return;
+  const s=spot(),c=cur(),day=DAYS[state.day],ev=sunEvents(day,s),P=$("dockbody");
+  if(state.tab==="spots"){
+    P.innerHTML=`<div class="spothead">BEST FOR ${dayName(state.day)} ${hourLabel(state.hour).toUpperCase()}<small>${SPOTS.length} spots ranked by light at that hour${state.live?" with the live forecast":""}, how many trees there are, and whether the street lines up with a low sun.</small></div><div class="list" id="slist"></div>`;
+    const Lst=$("slist");RANK.forEach((r,i)=>{const x=r.s,b=document.createElement("button");b.className="row ranked";b.id="row-"+x.id;b.setAttribute("aria-pressed",x.id===state.spot);
+      b.innerHTML=`<span class="rank">${i+1}</span>${flowerSVG(BANDC[band(r.total)])}<span><b>${x.name}</b><span class="why">${r.why.join(" · ")}</span></span><span class="score" style="background:${BANDC[band(r.total)]}">${r.total}</span>`;
+      b.onclick=()=>select(x.id);Lst.appendChild(b)});
+    return}
+  const facts=[["SUN HEIGHT",c.pos.elev<-0.8?`${c.pos.elev.toFixed(0)}° DOWN`:`${c.pos.elev.toFixed(0)}°`],["SUN FROM",`${compass(c.pos.az)} ${Math.round(c.pos.az)}°`],["SUNRISE",ev.rise?fmtTime(ev.rise):"--"],["SUNSET",ev.set?fmtTime(ev.set):"--"]];
+  const key=day.key,sky=state.sky[key]||"some";
+  const skyUI=state.live?`<div class="skyrow">SKY · LIVE ${(state.liveSrc||"").toUpperCase()} · ${Math.round(c.w.c)}% CLOUD · ${Math.round(c.w.p)}% RAIN${c.w.wind?` · WIND ${Math.round(c.w.wind)} KM/H`:""}</div>`
+    :`<div class="skyrow"><label for="skysel">SKY ${dayName(state.day,true)}</label><select id="skysel">${Object.entries(SKIES).map(([k,v])=>`<option value="${k}"${k===sky?" selected":""}>${v.label}</option>`).join("")}</select><a href="https://www.bom.gov.au/nsw/forecasts/sydney.shtml" target="_blank" rel="noopener">CHECK BOM ↗</a></div>`;
+  P.innerHTML=`<div class="spothead">${s.name}<small>${s.fav?s.note:`${s.n} jacarandas here, averaging ${s.h} m tall · ${s.src===1?"Randwick Council":"City of Sydney"} data`}</small></div>
+   ${nowBubble(s)}<div class="bubble alt"><span class="who">LIGHT CHECK</span>${dayName(state.day)} ${hourLabel(c.h)}: ${phase(c.pos.elev).toLowerCase()}. Score ${c.s}/100, ${WORD[band(c.s)].toLowerCase()}.</div>
+   <dl class="facts">${facts.map(([k,v])=>`<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
+   ${skyUI}
+   ${tips(c).map(t=>`<div class="bubble"><span class="who">FIELD NOTE</span>${t}</div>`).join("")}
+   <a class="maplink" href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}" target="_blank" rel="noopener">DIRECTIONS ↗</a>`;
+  const ss=$("skysel");if(ss)ss.onchange=()=>{state.sky[key]=ss.value;save();grid();renderAll()};
+}
+
+/* ---------- controls + log ---------- */
+function renderDeck(){
+  $("day-0").setAttribute("aria-pressed",state.day===0);$("day-1").setAttribute("aria-pressed",state.day===1);
+  const sel=$("daysel");sel.innerHTML=`<option value="" ${state.day<2?"selected":""}>MORE DAYS</option>`+DAYS.map((d,i)=>i<2?"":`<option value="${i}"${state.day===i?" selected":""}>${dayName(i,true)} ${d.d}/${d.m}</option>`).join("");
+  sel.classList.toggle("on",state.day>=2);
+  $("hourlcd").textContent=hourLabel(state.hour).toUpperCase();$("hnow").setAttribute("aria-pressed",state.follow);
+  $("hup").disabled=state.hour>=HOURS.at(-1);$("hdown").disabled=state.hour<=HOURS[0];
+}
+function pickDay(di){state.follow=false;state.day=di;const row=G[di],now=Date.now();const ok=row.filter(c=>c.t.getTime()+30*60000>now);state.hour=(ok.length?ok:row).reduce((a,c)=>c.s>a.s?c:a).h;renderAll()}
+function renderLog(){
+  $("logspot").textContent=spot().name.toUpperCase();
+  $("ticks").innerHTML=HOURS.map(h=>`<span>${hourLabel(h)}</span>`).join("");
+  const Lg=$("log");Lg.innerHTML="";const now=Date.now();
+  G.forEach((row,di)=>{const d=DAYS[di],el=document.createElement("div");el.className="dayrow";
+    const best=row.filter(c=>c.t.getTime()+30*60000>now).reduce((a,c)=>!a||c.s>a.s?c:a,null);
+    el.innerHTML=`<div class="dname">${dayName(di)}<small>${d.d}/${d.m}</small></div>`;
+    const st=document.createElement("div");st.className="strip";
+    row.forEach(c=>{const b=document.createElement("button");b.className="cell";b.id=`c-${di}-${c.h}`;b.style.background=`var(--s${band(c.s)})`;
+      if(c.t.getTime()+30*60000<now)b.style.opacity=".3";b.title=`${hourLabel(c.h)} · ${WORD[band(c.s)]} ${c.s}`;b.setAttribute("aria-label",`${dayName(di)} ${hourLabel(c.h)}: ${WORD[band(c.s)]}`);
+      b.setAttribute("aria-pressed",state.day===di&&state.hour===c.h);if(isNowCell(di,c.h))b.classList.add("now");b.onclick=()=>{state.follow=false;state.day=di;state.hour=c.h;renderAll()};st.appendChild(b)});
+    el.appendChild(st);const bb=document.createElement("div");bb.className="dbest";bb.textContent=best?`BEST ${hourLabel(best.h).toUpperCase()}`:"--";el.appendChild(bb);Lg.appendChild(el)});
+}
+function renderTop(){
+  const c=cur();$("lcd").innerHTML=`${String(c.s).padStart(3,"0")} <small>${WORD[band(c.s)]} · ${dayName(state.day,true)} ${hourLabel(c.h).toUpperCase()}</small>`;
+  const b=bestOverall(),A=$("alert");
+  if(b&&state.alert){const ev=sunEvents(DAYS[b.di],spot()),gold=b.c.pos.elev<6&&b.c.pos.elev>-1;
+    const when=gold?(b.c.h<12?(ev.rise&&ev.goldEnd?`${fmtTime(ev.rise)}–${fmtTime(ev.goldEnd)}`:hourLabel(b.c.h)):(ev.goldStart&&ev.set?`${fmtTime(ev.goldStart)}–${fmtTime(ev.set)}`:hourLabel(b.c.h))):hourLabel(b.c.h);
+    A.hidden=false;A.innerHTML=`<span class="x" id="alertx" role="button" aria-label="Dismiss">✕</span><b>${phase(b.c.pos.elev).toUpperCase()} IN YOUR VICINITY</b>${dayName(b.di)} · ${when.toUpperCase()} · TAP TO JUMP`;
+    A.onclick=e=>{if(e.target.id==="alertx"){state.alert=false;A.hidden=true;return}state.follow=false;state.day=b.di;state.hour=b.c.h;renderAll()}}else A.hidden=true;
+}
+function renderAll(){rankSpots();$("legtime").textContent=`${dayName(state.day,true)} ${hourLabel(state.hour).toUpperCase()}`;renderTop();renderDock();renderDeck();renderLog();queue()}
+
+$("tab-notes").onclick=()=>{state.tab="notes";state.open=true;save();renderDock()};
+$("tab-spots").onclick=()=>{state.tab="spots";state.open=true;save();renderDock()};
+$("fold").onclick=()=>{state.open=!state.open;save();renderDock()};
+$("day-0").onclick=()=>pickDay(0);$("day-1").onclick=()=>pickDay(1);
+$("daysel").onchange=e=>{if(e.target.value!=="")pickDay(+e.target.value)};
+$("hup").onclick=()=>{state.follow=false;state.hour=Math.min(HOURS.at(-1),state.hour+1);renderAll()};
+$("hdown").onclick=()=>{state.follow=false;state.hour=Math.max(HOURS[0],state.hour-1);renderAll()};
+
+/* live weather via the viewer's AccuWeather connector */
+const AW={server:"AccuWeather",key:"3496594"};let awH=null,awD=null;
+function pct(v){return typeof v==="number"?v:parseFloat(v)||0}
+function buildAccu(){
+  if(!awH&&!awD)return;const m={};
+  if(awD)for(const d of awD.dailyForecast||[]){const k=String(d.date).slice(0,10);
+    for(const h of HOURS){const part=h>=7&&h<=18?d.day:d.night;if(!part)continue;const c=pct(part.extended?.cloudCoverValue);
+      m[k+"T"+String(h).padStart(2,"0")]={c,lo:c>70?c*0.8:c*0.3,hi:c*0.6,p:pct(part.rainProbabilityValue)*0.6,wind:parseFloat(part.extended?.wind?.split(" ")[1])||0}}}
+  if(awH)for(const x of awH.hourlyForecast||[]){const k=String(x.date).slice(0,13),e=x.extended||{},c=pct(e.cloudCoverValue),ceil=parseFloat(e.ceiling)||9000;
+    m[k]={c,lo:ceil<2500?c:c*0.2,hi:ceil>=6000?c:c*0.4,p:pct(e.rainProbability),wind:e.windValue||0}}
+  state.live=m;state.liveSrc="accu";state.liveAt=new Date();grid();renderAll()}
+(async()=>{try{const mcp=await window.claude?.use?.("mcp");if(!mcp)return;
+  const input={queryParams:{locationKey:AW.key,unit:"metric",lang:"en"}};
+  mcp.watchTool(AW.server,"widgets-hourly-claude",input,ev=>{if(ev.type==="data"&&ev.result.payload){awH=ev.result.payload;buildAccu()}},{cache:{staleTime:20*60000},refetchInterval:30*60000});
+  mcp.watchTool(AW.server,"widgets-daily-claude",input,ev=>{if(ev.type==="data"&&ev.result.payload){awD=ev.result.payload;buildAccu()}},{cache:{staleTime:60*60000},refetchInterval:90*60000});
+}catch(e){}})();
+/* boot */
+
+function nowParts(){return sydParts(new Date())}
+function isNowCell(di,h){const p=nowParts();return di===0&&p.hour===h}
+function followNow(){const p=nowParts();if(p.hour<HOURS[0]){state.day=0;state.hour=HOURS[0]}else if(p.hour>HOURS.at(-1)){state.day=1;state.hour=HOURS[0]}else{state.day=0;state.hour=p.hour}}
+function tickClock(){const d=new Date(),p=sydParts(d),h=p.hour%12||12;$("clock").innerHTML=`${h}<span class="dot">:</span>${String(p.minute).padStart(2,"0")} <small>${p.hour<12?"AM":"PM"} SYD</small>`}
+$("hnow").onclick=()=>{state.follow=true;followNow();renderAll()};
+buildPins();grid();followNow();tickClock();
+new ResizeObserver(()=>resize()).observe(scr);resize();renderAll();
+document.fonts&&document.fonts.ready.then(()=>queue());
+tryLive(spot()).then(()=>{if(state.live){grid();renderAll()}});
+let lastHr=nowParts().hour;
+setInterval(()=>{tickClock();const k=dayList()[0].key,p=nowParts();if(k!==DAYS[0].key){DAYS=dayList();grid();if(state.follow)followNow();renderAll();lastHr=p.hour;return}
+  if(p.hour!==lastHr){lastHr=p.hour;if(state.follow)followNow();renderAll()}else if(state.follow&&state.open&&state.tab==="notes")renderDock()},20000);
+})();
+</script>
