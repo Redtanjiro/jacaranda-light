@@ -18,16 +18,17 @@
   --lcdf:"VT323","Courier New",monospace;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--desk);color:var(--cream);font-family:var(--ui);font-size:15px;line-height:1.4;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
-.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+/* the frame runs flush to the window edges: no desk margin, no rounded outer corners */
+html,body{background:var(--frame)}
+body{margin:0;padding:0;color:var(--cream);font-family:var(--ui);font-size:15px;line-height:1.4}
+.wrap{display:flex;flex-direction:column}
 button,select{font:inherit;color:inherit}
 button{cursor:pointer}
 button:focus-visible,select:focus-visible{outline:3px solid var(--lcd);outline-offset:2px}
 .notch{clip-path:polygon(6px 0,calc(100% - 6px) 0,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0 calc(100% - 6px),0 6px)}
 
-.device{background:var(--frame);border:4px solid var(--edge);border-radius:18px;padding:12px;
-  box-shadow:inset 4px 4px 0 var(--frame-hi),inset -4px -4px 0 var(--frame-lo),0 18px 40px #0008;display:flex;flex-direction:column;gap:12px}
+.device{background:var(--frame);padding:calc(env(safe-area-inset-top,0px) + 12px) max(12px,env(safe-area-inset-right,0px)) 12px max(12px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;gap:12px}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .plate{background:var(--land);border:3px solid var(--edge);padding:7px 14px;display:flex;align-items:center;gap:12px;box-shadow:inset 0 0 0 2px var(--frame-hi)}
 .plate h1{margin:0;font-family:var(--px);font-weight:700;font-size:clamp(1rem,3.2vw,1.5rem);letter-spacing:.06em;color:var(--frame-hi);text-shadow:2px 2px 0 var(--edge)}
@@ -43,7 +44,7 @@ button:focus-visible,select:focus-visible{outline:3px solid var(--lcd);outline-o
 .lcd small{font-size:1rem;opacity:.75}
 
 /* map screen */
-.screen{position:relative;background:var(--water);border:4px solid var(--edge);border-radius:6px;overflow:hidden;height:clamp(540px,80vh,880px);max-width:100%;
+.screen{position:relative;background:var(--water);border:4px solid var(--edge);overflow:hidden;height:clamp(540px,80vh,880px);max-width:100%;
   box-shadow:inset 0 0 0 3px var(--grid);touch-action:none;user-select:none}
 @media (max-width:700px){.screen{height:min(82vh,760px)}}
 canvas.layer{position:absolute;inset:0;width:100%;height:100%}
@@ -143,7 +144,7 @@ select.key{appearance:none;-webkit-appearance:none;background-color:var(--go);pa
 @media (max-width:700px){.spacer,.mascot{display:none}.deck{gap:10px}.ctl{width:100%;flex-wrap:nowrap;gap:6px}.ctl .key{padding:6px 7px 7px;font-size:.6rem}select.key{padding-right:24px;min-width:0;flex:1}.pin{width:22px;height:22px;margin:-11px 0 0 -11px}.pin.big{width:28px;height:28px;margin:-14px 0 0 -14px}}
 
 /* log */
-.log{background:var(--land);border:4px solid var(--edge);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 0 3px var(--grid)}
+.log{background:var(--land);border-block:4px solid var(--edge);padding:14px max(14px,env(safe-area-inset-right,0px)) 14px max(14px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:6px;box-shadow:inset 0 0 0 3px var(--grid)}
 .log h2{margin:0 0 6px;font-family:var(--px);font-size:.88rem;color:var(--frame-hi);letter-spacing:.06em;text-wrap:balance}
 .dayrow{display:grid;grid-template-columns:84px minmax(0,1fr) 92px;gap:10px;align-items:center}
 .dname{font-family:var(--px);font-size:.64rem;line-height:1.25}
@@ -158,15 +159,12 @@ select.key{appearance:none;-webkit-appearance:none;background-color:var(--go);pa
 @media (max-width:620px){.dayrow{grid-template-columns:1fr auto}.strip{grid-column:1/-1;grid-row:2}.axis{grid-template-columns:1fr}.axis>div:not(.ticks){display:none}}
 .keyline{display:flex;flex-wrap:wrap;gap:12px;font-size:.78rem;color:var(--muted);margin-top:6px}
 .keyline i{display:inline-block;width:12px;height:12px;border:2px solid #0d1640;vertical-align:-2px;margin-right:5px}
-footer{color:#9a95ad;font-size:.8rem;max-width:76ch;line-height:1.5}
-footer a{color:#c3a1ff}
+footer{color:var(--ink);font-size:.8rem;line-height:1.5;max-width:110ch;padding:14px max(14px,env(safe-area-inset-left,0px)) calc(24px + env(safe-area-inset-bottom,0px))}
+footer a{color:var(--edge)}
 
-/* phones: no desk margin or outer frame; header, map and controls fill one screen, log scrolls below */
+/* phones: header, map and controls fill one screen, map runs edge to edge, log scrolls below */
 @media (max-width:700px){
-  html,body{background:var(--frame)}
-  body{padding:0}
-  .wrap{gap:0}
-  .device{border:0;border-radius:0;box-shadow:none;padding:calc(env(safe-area-inset-top,0px) + 6px) 0 8px;gap:6px;min-height:100vh;min-height:100svh}
+  .device{padding:calc(env(safe-area-inset-top,0px) + 6px) 0 8px;gap:6px;min-height:100vh;min-height:100svh}
   .top{padding:0 8px;gap:6px;flex-wrap:nowrap}
   .plate{padding:5px 8px;gap:7px;min-width:0;flex:1 1 auto}
   .plate svg{width:20px;height:20px}
@@ -175,11 +173,9 @@ footer a{color:#c3a1ff}
   .lcd{font-size:1.25rem;padding:4px 7px}
   .lcd small{font-size:.8rem}
   .lcdwhen,.clock small{display:none}
-  .screen{flex:1 1 auto;height:auto;min-height:360px;border-left:0;border-right:0;border-radius:0}
+  .screen{flex:1 1 auto;height:auto;min-height:360px;border-left:0;border-right:0}
   .deck{margin:0 8px;padding:8px 10px}
-  .log{border-radius:0;border-left:0;border-right:0;padding:12px 10px}
-  footer{max-width:none;padding:14px 12px calc(20px + env(safe-area-inset-bottom,0px));color:var(--ink)}
-  footer a{color:var(--edge)}
+  .log{padding:12px 10px}
   .alert{right:54px}
   .mapctl{top:40px}
 }
