@@ -23,7 +23,7 @@ from shapely.geometry import Point
 
 ROOT = Path(__file__).resolve().parent.parent
 BOUNDS = (150.62, -34.13, 151.35, -33.57)  # lon/lat box the basemap covers
-UA = {"User-Agent": "JacarandaLight/1.0 (github.com/Redtanjiro/jacaranda-light)"}
+UA = {"User-Agent": "JacarandaBae/1.0 (github.com/Redtanjiro/jacaranda-light)"}
 
 def osm_trees(paths):
     out, seen = [], set()

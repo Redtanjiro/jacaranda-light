@@ -1,4 +1,4 @@
-# Jacaranda Light — handoff
+# Jacaranda Bae — handoff
 
 A single-page web app that tells amateur photographers **where and when** to shoot Sydney's jacarandas. It maps 2,645 jacarandas across greater Sydney (council inventories, OpenStreetMap and iNaturalist), groups them into 109 photo spots plus 5 hand-picked favourites, and scores every hour of the next 7 days from sun position, per-spot forecast weather, tree count and street direction. Forecast cloud drifts over the map.
 
