@@ -233,7 +233,7 @@ footer a{color:#c3a1ff}
     </div>
 
     <div class="deck">
-      <svg class="mascot" id="mascot" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"></svg>
+      <svg class="mascot" id="mascot" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true"></svg>
       <div class="ctl">
         <span class="lab">DAY</span>
         <button class="key" id="day-0">TODAY</button>
@@ -295,7 +295,7 @@ const pxRects=(rows,map)=>rows.map((row,y)=>[...row].map((c,x)=>map[c]?`<rect x=
 const FMAP={p:"#c3a1ff",P:"#8b5cf6",y:"#f7e27a"};
 const flowerSVG=ring=>`<svg viewBox="-1.5 -1.5 10 10" shape-rendering="crispEdges"><circle cx="3.5" cy="3.5" r="4.6" fill="${ring}" stroke="#14244f" stroke-width="0.9"/>${pxRects(FLOWER,FMAP)}</svg>`;
 $("logo").innerHTML=pxRects(FLOWER,FMAP);
-$("mascot").innerHTML=pxRects(["....pp......","...pPPp.....","....pp......","..eeeeeeee..","eeccccccccee","ecckkkkkccce","eckkwwwkkcce","eckkwwwkkcce","ecckkkkkccce","eeccccccccee","..eeeeeeee..","............"],{p:"#c3a1ff",P:"#8b5cf6",e:"#14244f",c:"#f08a7a",k:"#22308a",w:"#a9dcf7"});
+$("mascot").innerHTML=pxRects(FLOWER,FMAP);
 
 /* time */
 const partsFmt=new Intl.DateTimeFormat("en-AU",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
